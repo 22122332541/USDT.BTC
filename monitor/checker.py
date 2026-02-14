@@ -16,7 +16,11 @@ def get_memory_usage() -> float:
 
 
 def get_disk_usage(path: str = "/") -> float:
-    """Return disk usage percentage for *path*."""
+    """Return disk usage percentage for *path*.
+
+    Note: The default path ``/`` targets Unix-like systems.  On Windows,
+    pass an explicit drive such as ``C:\\``.
+    """
     return psutil.disk_usage(path).percent
 
 

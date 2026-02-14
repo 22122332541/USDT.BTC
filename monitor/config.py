@@ -27,7 +27,7 @@ SMTP_USE_SSL = os.getenv("MONITOR_SMTP_USE_SSL", "true").lower() == "true"
 
 # Sender credentials – MUST be set via environment variables
 EMAIL_SENDER = os.getenv("MONITOR_EMAIL_SENDER", "")
-EMAIL_PASSWORD = os.getenv("MONITOR_EMAIL_PASSWORD", "")  # QQ授权码
+EMAIL_PASSWORD = os.getenv("MONITOR_EMAIL_PASSWORD", "")  # QQ auth code (QQ授权码)
 
 # Recipient
 EMAIL_RECIPIENT = os.getenv("MONITOR_EMAIL_RECIPIENT", "2968658164@qq.com")

@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from monitor.checker import check_anomalies
-from monitor.notifier import build_alert_message
+from monitor.notifier import build_alert_message, notify
 
 
 class TestCheckAnomalies(unittest.TestCase):
@@ -50,6 +50,13 @@ class TestBuildAlertMessage(unittest.TestCase):
     def test_empty_anomalies(self):
         body = build_alert_message([])
         self.assertIn("Anomaly Alert", body)
+
+
+class TestNotify(unittest.TestCase):
+    """Verify that notify() handles edge cases."""
+
+    def test_notify_returns_false_for_empty_anomalies(self):
+        self.assertFalse(notify([]))
 
 
 if __name__ == "__main__":

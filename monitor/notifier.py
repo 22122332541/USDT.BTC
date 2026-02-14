@@ -68,5 +68,6 @@ def notify(anomalies: list[dict]) -> bool:
     if not anomalies:
         return False
     body = build_alert_message(anomalies)
-    subject = f"[Monitor] {len(anomalies)} anomaly alert(s)"
+    count = len(anomalies)
+    subject = f"[Monitor] {count} anomaly alert{'s' if count != 1 else ''}"
     return send_email(subject, body)
