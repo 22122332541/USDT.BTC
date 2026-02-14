@@ -26,7 +26,7 @@ class AccessAttempt:
 class SecurityProtection:
     """Core security protection for user data.
 
-    Detects brute-force file access, unauthorised firmware flashing,
+    Detects brute-force file access, unauthorized firmware flashing,
     and triggers memory self-destruct when thresholds are breached.
 
     Parameters
@@ -36,7 +36,7 @@ class SecurityProtection:
     window_seconds : float
         Sliding window in seconds for attempt counting (default 300).
     flash_hash : str or None
-        Expected SHA-256 hex digest of the authorised firmware image.
+        Expected SHA-256 hex digest of the authorized firmware image.
         If *None*, flash verification is disabled.
     on_destruct : callable or None
         Optional callback invoked when self-destruct triggers.
@@ -141,18 +141,30 @@ class SecurityProtection:
     def memory_destruct(self) -> list[str]:
         """Securely wipe all registered protected paths.
 
-        Returns the list of paths that were wiped.
+        Returns the list of paths that were successfully wiped.
+        Raises *OSError* if any path could not be fully wiped.
         """
         wiped: list[str] = []
+        failed: list[str] = []
         for path in self._protected_paths:
-            if os.path.isfile(path):
-                self._secure_wipe_file(path)
-                wiped.append(path)
-            elif os.path.isdir(path):
-                self._secure_wipe_directory(path)
-                wiped.append(path)
-            else:
-                logger.warning("Protected path not found, skipping: %s", path)
+            try:
+                if os.path.isfile(path):
+                    self._secure_wipe_file(path)
+                    wiped.append(path)
+                elif os.path.isdir(path):
+                    self._secure_wipe_directory(path)
+                    wiped.append(path)
+                else:
+                    logger.warning(
+                        "Protected path not found, skipping: %s", path
+                    )
+            except OSError:
+                logger.exception("Failed to wipe: %s", path)
+                failed.append(path)
+        if failed:
+            raise OSError(
+                f"Failed to wipe {len(failed)} path(s): {failed}"
+            )
         return wiped
 
     # ------------------------------------------------------------------
@@ -162,7 +174,11 @@ class SecurityProtection:
     def _trigger_destruct(self) -> None:
         """Lock the system and wipe protected data."""
         self._locked = True
-        wiped = self.memory_destruct()
+        try:
+            wiped = self.memory_destruct()
+        except OSError:
+            logger.exception("Partial wipe failure during self-destruct")
+            wiped = []
         if self.on_destruct is not None:
             self.on_destruct(wiped)
 
@@ -180,32 +196,27 @@ class SecurityProtection:
 
     @staticmethod
     def _secure_wipe_file(path: str) -> None:
-        """Overwrite *path* with random bytes, then remove it."""
-        try:
-            size = os.path.getsize(path)
-            with open(path, "r+b") as fh:
-                fh.write(os.urandom(size))
+        """Overwrite *path* with multiple passes, then remove it.
+
+        Three passes are performed: random bytes, zeros, random bytes.
+        Raises OSError if the wipe or deletion fails.
+        """
+        size = os.path.getsize(path)
+        with open(path, "r+b") as fh:
+            for data in (os.urandom(size), b"\x00" * size, os.urandom(size)):
+                fh.seek(0)
+                fh.write(data)
                 fh.flush()
                 os.fsync(fh.fileno())
-            os.remove(path)
-            logger.info("Securely wiped file: %s", path)
-        except OSError:
-            logger.exception("Failed to wipe file: %s", path)
+        os.remove(path)
+        logger.info("Securely wiped file: %s", path)
 
     @staticmethod
     def _secure_wipe_directory(path: str) -> None:
         """Recursively wipe all files under *path*, then remove dirs."""
         for root, dirs, files in os.walk(path, topdown=False):
             for name in files:
-                fpath = os.path.join(root, name)
-                SecurityProtection._secure_wipe_file(fpath)
+                SecurityProtection._secure_wipe_file(os.path.join(root, name))
             for name in dirs:
-                dpath = os.path.join(root, name)
-                try:
-                    os.rmdir(dpath)
-                except OSError:
-                    logger.exception("Failed to remove dir: %s", dpath)
-        try:
-            os.rmdir(path)
-        except OSError:
-            logger.exception("Failed to remove dir: %s", path)
+                os.rmdir(os.path.join(root, name))
+        os.rmdir(path)
